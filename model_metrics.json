@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-08-31T00:54:07",
+  "rows_used": 26396,
+  "players": 11265,
+  "features": [
+    "age",
+    "pace",
+    "movement_acceleration",
+    "movement_sprint_speed",
+    "movement_agility",
+    "movement_reactions",
+    "movement_balance",
+    "physic",
+    "power_stamina",
+    "power_strength",
+    "mentality_composure",
+    "shooting",
+    "attacking_finishing",
+    "power_shot_power",
+    "power_long_shots",
+    "passing",
+    "attacking_short_passing",
+    "mentality_vision",
+    "attacking_crossing",
+    "dribbling",
+    "skill_dribbling",
+    "skill_ball_control",
+    "defending",
+    "defending_standing_tackle",
+    "mentality_interceptions"
+  ],
+  "split": {
+    "type": "GroupShuffleSplit by player_key",
+    "test_size": 0.2,
+    "seed": 42
+  },
+  "train_seconds": 3.3,
+  "holdout_fresh_model": {
+    "r2": 0.8676,
+    "r2_log": 0.92,
+    "mae_eur": 2075076,
+    "median_ape_pct": 24.48,
+    "p90_ape_pct": 84.75,
+    "within_20pct": 42.0,
+    "n": 5323
+  },
+  "shipped_model_on_test_rows": {
+    "r2": 0.9682,
+    "r2_log": 0.9796,
+    "mae_eur": 892317,
+    "median_ape_pct": 8.99,
+    "p90_ape_pct": 35.03,
+    "within_20pct": 77.4,
+    "n": 5323
+  },
+  "shipped_model_on_all_rows": {
+    "r2": 0.9728,
+    "r2_log": 0.979,
+    "mae_eur": 809045,
+    "median_ape_pct": 9.07,
+    "p90_ape_pct": 35.03,
+    "within_20pct": 77.5,
+    "n": 26396
+  },
+  "baseline_median": {
+    "r2": -0.1283,
+    "r2_log": -0.006,
+    "mae_eur": 6796363,
+    "median_ape_pct": 81.43,
+    "p90_ape_pct": 447.37,
+    "within_20pct": 9.5,
+    "n": 5323
+  },
+  "per_position_group": [
+    {
+      "position_group": "ATT",
+      "r2": 0.8662,
+      "r2_log": 0.9286,
+      "mae_eur": 3007565,
+      "median_ape_pct": 24.64,
+      "p90_ape_pct": 85.45,
+      "within_20pct": 40.8,
+      "n": 1211
+    },
+    {
+      "position_group": "DEF",
+      "r2": 0.8356,
+      "r2_log": 0.9061,
+      "mae_eur": 1786574,
+      "median_ape_pct": 25.03,
+      "p90_ape_pct": 86.11,
+      "within_20pct": 40.8,
+      "n": 1956
+    },
+    {
+      "position_group": "MID",
+      "r2": 0.8874,
+      "r2_log": 0.9247,
+      "mae_eur": 1813047,
+      "median_ape_pct": 23.95,
+      "p90_ape_pct": 83.18,
+      "within_20pct": 43.8,
+      "n": 2156
+    }
+  ],
+  "catatan": "holdout_fresh_model adalah satu-satunya angka out-of-sample. Dua entri shipped_model_* dihitung di data latihnya sendiri, jadi optimistis dan hanya untuk pembanding."
+}
