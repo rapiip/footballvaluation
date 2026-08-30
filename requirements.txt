@@ -1,0 +1,14 @@
+# Versi yang sudah diverifikasi jalan di proyek ini (Python 3.12).
+streamlit==1.52.2
+pandas==2.3.3
+numpy==2.2.5
+plotly==6.5.0
+joblib==1.5.3
+
+# model_rf_market_value.pkl dilatih dengan scikit-learn 1.6.1.
+# 1.8.0 masih bisa memuatnya (warning versi ditekan di fcv/model.py) dan
+# hasil prediksinya sudah dicek sama; pakai 1.6.1 kalau ingin bebas warning.
+scikit-learn==1.8.0
+
+# pengembangan
+pytest==9.0.3

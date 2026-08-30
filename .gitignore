@@ -1,0 +1,25 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# --- Artefak lokal ---
+# Catatan: git tidak mendukung komentar di akhir baris pola,
+# jadi setiap keterangan ditulis di baris tersendiri seperti ini.
+
+# Salinan model tanpa kompresi (153 MB). Yang ikut ter-track adalah
+# versi terkompresi 28 MB dengan struktur pohon identik.
+model_rf_market_value.full.pkl
+
+# Model hasil eksperimen
+model_eksperimen*.pkl
+
+# Berkas kerja sementara di root (pola diawali "/" agar tidak
+# ikut membuang fcv/__init__.py)
+/_*.py
+/_*.log
+/_*.pkl
+/_*.png
