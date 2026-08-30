@@ -103,6 +103,16 @@ def section(title: str, note: str = "") -> None:
     )
 
 
+def tab_intro(html: str) -> None:
+    """Kalimat pembuka tab.
+
+    Menggantikan judul seksi yang tadinya mengulang nama tab persis di
+    atasnya (tab "MARKET SCANNER" + judul "MARKET SCANNER"), sehingga
+    hierarkinya jadi tab > seksi > isi, bukan dua judul sederajat.
+    """
+    st.markdown(f'<div class="fc-intro">{html}</div>', unsafe_allow_html=True)
+
+
 def app_header(dq, model_note: str) -> None:
     st.markdown(
         '<div class="fc-top"><div class="fc-top__mark">FCV</div><div>'
@@ -182,14 +192,18 @@ def verdict_block(row: pd.Series) -> str:
     )
 
 
-def tiles(items: list[tuple[str, str, str]]) -> str:
-    body = "".join(
-        f'<div class="fc-tile"><div class="fc-tile__k">{escape(k)}</div>'
-        f'<div class="fc-tile__v">{escape(v)}</div>'
-        f'<div class="fc-tile__s">{escape(s)}</div></div>'
-        for k, v, s in items
-    )
-    return f'<div class="fc-tiles">{body}</div>'
+def tiles(items: list[tuple]) -> str:
+    """Baris tile KPI. Item boleh 3 elemen (label, nilai, sub) atau 4 elemen
+    dengan elemen keempat `True` untuk menandai tile redup."""
+    parts = []
+    for item in items:
+        key, value, sub = item[0], item[1], item[2]
+        muted = " fc-tile--muted" if len(item) > 3 and item[3] else ""
+        parts.append(
+            f'<div class="fc-tile{muted}"><div class="fc-tile__k">{escape(key)}</div>'
+            f'<div class="fc-tile__v">{escape(value)}</div>'
+            f'<div class="fc-tile__s">{escape(sub)}</div></div>')
+    return f'<div class="fc-tiles">{"".join(parts)}</div>'
 
 
 def percentile_bars(row: pd.Series, cols: list[str] | None = None) -> str:
@@ -208,6 +222,22 @@ def percentile_bars(row: pd.Series, cols: list[str] | None = None) -> str:
     return f'<div class="fc-bars">{"".join(rows)}</div>'
 
 
+GAP_BAR_SCALE = 60.0   # persen selisih yang mengisi setengah lebar bar
+GAP_BAR_MIN = 3.5      # lebar minimum agar selisih kecil tetap terlihat sebagai tick
+
+
+def _gap_bar(gap_pct: float) -> str:
+    """Bar selisih dengan nol di tengah, agar besarannya bisa dibandingkan
+    antar baris tanpa harus membaca angkanya satu per satu."""
+    if gap_pct is None or pd.isna(gap_pct):
+        return '<span class="fc-mini__bar"></span>'
+    span = min(abs(float(gap_pct)) / GAP_BAR_SCALE, 1.0) * 50
+    span = max(span, GAP_BAR_MIN)
+    side = "left:50%" if gap_pct >= 0 else "right:50%"
+    cls = "" if gap_pct >= 0 else ' class="neg"'
+    return f'<span class="fc-mini__bar"><i{cls} style="{side};width:{span:.1f}%"></i></span>'
+
+
 def mini_card(row: pd.Series, note: str | None = None) -> str:
     """Kartu ringkas satu baris. `note` (mis. skor kemiripan) diletakkan di
     dalam kartu, bukan sebagai caption terpisah di bawahnya, supaya tinggi
@@ -223,9 +253,10 @@ def mini_card(row: pd.Series, note: str | None = None) -> str:
         f'<div class="fc-mini__main"><div class="fc-mini__name">{escape(str(row["short_name"]))}</div>'
         f'<div class="fc-mini__meta">{escape(str(row["club_name"]))} · {int(row["age"])} th · '
         f'{escape(str(row["league_short"]))}</div>{note_html}</div>'
+        f'{_gap_bar(row["gap_pct"])}'
         f'<div class="fc-mini__val"><div class="now">{escape(money(row["value_eur"]))}</div>'
         f'<div class="gap {cls}">{escape(gap)}</div>'
-        f'<div class="gap {cls}">{escape(pct(row["gap_pct"], 0))} vs AI</div></div></div>'
+        f'<div class="gap {cls}">{escape(pct(row["gap_pct"], 0))}</div></div></div>'
     )
 
 
@@ -352,15 +383,21 @@ def market_scatter(df: pd.DataFrame, highlight: pd.Series | None = None) -> go.F
 
 
 def importance_chart(imp: pd.DataFrame, labels: dict[str, str], top: int = 12) -> go.Figure:
+    """Label nilai ditaruh di ujung bar supaya fitur berkontribusi kecil
+    (1-5%) tetap terbaca angkanya, bukan cuma jadi garis tipis."""
     head = imp.head(top).iloc[::-1]
     fig = go.Figure(go.Bar(
         x=head["share"], y=[labels.get(f, f) for f in head["feature"]], orientation="h",
-        marker=dict(color=head["share"], colorscale=[[0, "#19506b"], [.5, CYAN], [1, GREEN]],
+        marker=dict(color=head["share"], colorscale=[[0, "#1d5f7a"], [.5, CYAN], [1, GREEN]],
                     line=dict(width=0)),
+        text=[f"{v:.1f}%" for v in head["share"]], textposition="outside",
+        textfont=dict(family=BODY_FONT, size=11, color=DIM),
+        cliponaxis=False,
         hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
     ))
-    fig.update_xaxes(title="Kontribusi terhadap prediksi (%)")
-    return _dark(fig, 380)
+    fig.update_xaxes(title="Kontribusi terhadap prediksi (%)",
+                     range=[0, head["share"].max() * 1.12])
+    return _dark(fig, 330)
 
 
 def compare_bars(a: pd.Series, b: pd.Series) -> go.Figure:

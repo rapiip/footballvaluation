@@ -120,17 +120,29 @@ a:hover { text-decoration: underline; }
   font-weight: 700; letter-spacing: 0; margin-left: 4px;
 }
 
-/* ---------- judul seksi ---------- */
-.fc-sec { display: flex; align-items: center; gap: 13px; margin: 30px 0 14px; flex-wrap: wrap; }
-.fc-sec__bar { width: 5px; height: 24px; flex: none; background: linear-gradient(180deg, var(--fc-green), var(--fc-cyan)); box-shadow: 0 0 14px rgba(0, 245, 160, .65); }
+/* ---------- judul seksi ----------
+   Satu tingkat saja. Judul tab sudah berfungsi sebagai judul halaman,
+   jadi seksi di dalamnya sengaja dibuat lebih ringan agar hierarkinya
+   terbaca: tab > seksi > isi. */
+.fc-sec { display: flex; align-items: center; gap: 11px; margin: 26px 0 12px; flex-wrap: wrap; }
+.fc-sec__bar { width: 4px; height: 19px; flex: none; background: linear-gradient(180deg, var(--fc-green), var(--fc-cyan)); box-shadow: 0 0 12px rgba(0, 245, 160, .55); }
 .fc-sec__title {
-  font-family: var(--fc-display); font-size: var(--fs-md); font-weight: 700;
-  text-transform: uppercase; letter-spacing: .7px; line-height: 1.1;
+  font-family: var(--fc-display); font-size: 18px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px; line-height: 1.1;
 }
 .fc-sec__note {
   font-family: var(--fc-body); color: var(--fc-dim); font-size: var(--fs-meta);
-  letter-spacing: var(--ls-none); line-height: 1.5; padding-top: 2px;
+  letter-spacing: var(--ls-none); line-height: 1.5; padding-top: 1px;
 }
+
+/* intro tipis di bawah tab: menggantikan judul seksi yang tadinya
+   mengulang nama tab persis di atasnya */
+.fc-intro {
+  font-family: var(--fc-body); color: var(--fc-dim); font-size: var(--fs-body);
+  line-height: 1.6; max-width: 78ch; margin: 4px 0 20px;
+  padding-left: 13px; border-left: 2px solid rgba(0, 245, 160, .35);
+}
+.fc-intro b { color: var(--fc-ink); font-weight: 600; }
 
 /* ==========================================================================
    KARTU PEMAIN
@@ -222,17 +234,18 @@ a:hover { text-decoration: underline; }
 .fc-card__ribbon--fair { background: linear-gradient(90deg, #cfd8e6, #8fa0bf); }
 
 /* ---------- kartu mini (grid hasil scan) ----------
-   Semua baris nowrap + ellipsis: sebelumnya meta panjang seperti
-   "PARIS SAINT GERMAIN · 24 TH · LI1" membungkus ke baris kedua dan
-   membuat tinggi kartu dalam satu baris grid tidak sama. */
+   Empat kolom: badge OVR | nama+meta | bar selisih | harga.
+   Kolom bar mengisi ruang tengah yang tadinya kosong melebar, sekaligus
+   membuat besaran selisih bisa dibandingkan sekali lihat antar baris.
+   Semua baris teks nowrap + ellipsis supaya tinggi kartu seragam. */
 .fc-mini {
-  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto;
-  gap: 13px; align-items: center; padding: 12px 14px; min-height: 68px;
+  display: grid; grid-template-columns: 50px minmax(0, 1fr) 96px auto;
+  gap: 14px; align-items: center; padding: 11px 14px; min-height: 66px;
   border: 1px solid var(--fc-line); background: var(--fc-panel); border-radius: 3px;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   transition: transform .16s ease, border-color .16s ease, background .16s ease;
 }
-.fc-stack { display: flex; flex-direction: column; gap: 9px; }
+.fc-stack { display: flex; flex-direction: column; gap: 8px; }
 .fc-mini:hover { transform: translateY(-2px); border-color: rgba(0, 245, 160, .45); background: var(--fc-panel-2); }
 .fc-mini__ovr {
   font-family: var(--fc-display); font-size: 24px; font-weight: 700; line-height: 1;
@@ -262,6 +275,20 @@ a:hover { text-decoration: underline; }
   font-family: var(--fc-body); color: var(--fc-dim-2); font-size: 10.5px;
   letter-spacing: var(--ls-tight); line-height: 1.4; margin-top: 3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* bar selisih: garis nol di tengah, memanjang ke kanan bila model menilai
+   lebih tinggi dari pasar dan ke kiri bila sebaliknya */
+.fc-mini__bar { position: relative; height: 22px; }
+.fc-mini__bar::before {
+  content: ""; position: absolute; left: 50%; top: 3px; bottom: 3px;
+  width: 1px; background: rgba(255, 255, 255, .16);
+}
+.fc-mini__bar i {
+  position: absolute; top: 7px; height: 8px; border-radius: 1px;
+  background: linear-gradient(90deg, rgba(0, 245, 160, .35), var(--fc-green));
+}
+.fc-mini__bar i.neg {
+  background: linear-gradient(270deg, rgba(255, 90, 120, .35), var(--fc-red));
 }
 .fc-mini__val { text-align: right; white-space: nowrap; }
 .fc-mini__val .now { font-family: var(--fc-display); font-size: var(--fs-sm); font-weight: 700; line-height: 1.2; }
@@ -318,6 +345,11 @@ a:hover { text-decoration: underline; }
   font-family: var(--fc-body); font-size: var(--fs-label); color: var(--fc-dim-2);
   letter-spacing: var(--ls-none); line-height: 1.45;
 }
+/* varian redup untuk angka yang sengaja tidak boleh dibaca lebih dulu
+   (mis. skor in-sample yang optimistis di panel akurasi model) */
+.fc-tile--muted { background: rgba(255, 255, 255, .022); border-color: rgba(255, 255, 255, .06); }
+.fc-tile--muted .fc-tile__v { color: var(--fc-dim); font-weight: 600; }
+.fc-tile--muted .fc-tile__k { color: var(--fc-dim-2); }
 
 /* ---------- baris stat percentile ---------- */
 .fc-bars { display: flex; flex-direction: column; gap: 10px; }
@@ -383,9 +415,17 @@ a:hover { text-decoration: underline; }
 [data-testid="stSidebar"] [data-baseweb="select"] > div:first-child { max-height: none !important; }
 [data-testid="stSidebar"] [data-baseweb="select"] [data-baseweb="tag"] { max-width: 100%; }
 [data-testid="stSliderTickBar"] { display: none; }
+[data-testid="stSliderTickBarMin"], [data-testid="stSliderTickBarMax"] {
+  color: var(--fc-dim-2) !important; font-size: 10px !important; font-weight: 500;
+}
 [data-testid="stSliderThumbValue"], [data-testid="stThumbValue"] {
   font-family: var(--fc-display) !important; font-size: 13px !important; font-weight: 700;
 }
+/* rapatkan irama vertikal: jarak antar blok Streamlit disamakan agar
+   tidak bertumpuk dengan margin komponen sendiri */
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] { gap: .7rem; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: .55rem; }
+[data-testid="stMainBlockContainer"] [data-testid="stElementContainer"]:has(.fc-sec) { margin-bottom: -.2rem; }
 .stRadio [role="radiogroup"] label p { font-size: var(--fs-body) !important; text-transform: none; letter-spacing: 0; }
 
 [data-testid="stExpander"] { border: 1px solid var(--fc-line); background: var(--fc-panel); border-radius: 2px; }

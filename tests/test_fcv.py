@@ -1,6 +1,8 @@
 """Uji logika murni: rating, pembersihan data, verdict, dan format tampilan."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -254,9 +256,43 @@ def test_mini_card_shows_signed_gap():
     })
     html = ui.mini_card(row)
     assert "+€30,5 jt" in html and "+42%" in html and "gap-up" in html
+    assert "vs AI" not in html          # label berulang dihapus, sudah dijelaskan di seksi
     row["gap_eur"], row["gap_pct"] = -47_700_000.0, -44.0
     html = ui.mini_card(row)
     assert "−€47,7 jt" in html and "gap-down" in html
+
+
+def test_gap_bar_grows_with_gap_and_flips_side():
+    """Bar selisih: nol di tengah, kanan untuk positif, kiri untuk negatif."""
+    small = ui._gap_bar(6.0)
+    big = ui._gap_bar(60.0)
+    negative = ui._gap_bar(-30.0)
+
+    assert "left:50%" in small and "left:50%" in big
+    assert "right:50%" in negative and 'class="neg"' in negative
+
+    def width(html: str) -> float:
+        return float(html.split("width:")[1].split("%")[0])
+
+    assert width(small) < width(big)
+    assert width(big) == pytest.approx(50.0)      # dipatok setengah lebar
+    assert width(ui._gap_bar(500.0)) == pytest.approx(50.0)
+    assert width(ui._gap_bar(0.0)) == pytest.approx(ui.GAP_BAR_MIN)   # tetap terlihat
+    assert width(ui._gap_bar(1.0)) >= ui.GAP_BAR_MIN
+
+
+def test_tiles_support_muted_variant():
+    normal = ui.tiles([("R² holdout", "0.868", "5.323 baris uji")])
+    muted = ui.tiles([("R² in-sample", "0.973", "angka yang menipu", True)])
+    assert "fc-tile--muted" not in normal
+    assert "fc-tile--muted" in muted
+
+
+def test_tab_intro_and_section_are_distinct_levels():
+    """Judul tab tidak boleh diduplikasi sebagai judul seksi."""
+    source = (Path(ui.__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
+    for tab_name in ("Market scanner", "Head to head", "Data audit"):
+        assert f'ui.section("{tab_name}"' not in source
 
 
 def test_pct_and_initials():

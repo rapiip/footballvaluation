@@ -52,7 +52,7 @@ LATEST = DF.loc[DF["is_latest"]]
 OPTIONS = fcv_data.player_options(DF)
 
 ui.inject_css()
-model_note = (f"±{METRICS['holdout_fresh_model']['median_ape_pct']:.0f}% err"
+model_note = (f"±{METRICS['holdout_fresh_model']['median_ape_pct']:.0f}%"
               if METRICS else "RF 100 pohon")
 ui.app_header(DQ, model_note)
 
@@ -102,6 +102,8 @@ FILTERS = dict(leagues=sel_leagues, groups=sel_groups, age_range=(age_lo, age_hi
 
 # ----------------------------------------------------------------- tab 1
 def render_player_hub() -> None:
+    ui.tab_intro(f"Kartu <b>{selected['short_name']}</b> pada snapshot umur "
+                 f"{int(selected['age'])}, beserta posisi harganya terhadap estimasi model.")
     left, right = st.columns([0.86, 1.5], gap="large")
 
     with left:
@@ -116,14 +118,14 @@ def render_player_hub() -> None:
     with right:
         st.markdown(ui.verdict_block(selected), unsafe_allow_html=True)
         st.markdown(ui.tiles([
-            ("Harga pasar", ui.money(selected["value_eur"]), f"umur {int(selected['age'])}"),
+            ("Harga pasar", ui.money(selected["value_eur"]),
+             f"umur {int(selected['age'])} · persentil {selected['pct_value_eur']:.0f} di lini"),
             ("Estimasi model", ui.money(selected["pred_eur"]),
              f"selisih {ui.money(selected['gap_eur'])}"),
-            ("Gap", ui.pct(selected["gap_pct"]), "estimasi vs pasar"),
+            ("Gap", ui.pct(selected["gap_pct"]), "estimasi vs harga pasar"),
             ("OVR est.", str(int(selected["ovr"])),
-             f"persentil {selected['pct_ovr']:.0f} di lini"),
-            ("Percentile harga", f"{selected['pct_value_eur']:.0f}",
-             f"vs {ui.count(len(group_peers))} pemain selini"),
+             f"persentil {selected['pct_ovr']:.0f} di antara "
+             f"{ui.count(len(group_peers))} pemain selini"),
         ]), unsafe_allow_html=True)
 
         c1, c2 = st.columns([1, 1], gap="medium")
@@ -175,13 +177,12 @@ def render_player_hub() -> None:
 
 # ----------------------------------------------------------------- tab 2
 def render_scanner() -> None:
-    ui.section("Market scanner", "seluruh snapshot terbaru dinilai model, bukan satu pemain")
+    ui.tab_intro("Seluruh snapshot terbaru dinilai model sekaligus, bukan satu pemain. "
+                 "Urutan <b>%</b> didominasi pemain sangat murah — selisih €500 rb pada "
+                 "pemain €120 rb sudah +400%. Urutan <b>€</b> memunculkan target yang "
+                 "benar-benar material.")
     sort_mode = st.radio("Urutkan", ["abs", "pct"], horizontal=True, key="scan_sort",
                          format_func=lambda m: "Selisih €" if m == "abs" else "Selisih %")
-    st.markdown('<div class="fc-note" style="margin:-6px 0 16px">Urutan <b>%</b> '
-                'didominasi pemain sangat murah — selisih €500 rb pada pemain €120 rb '
-                'sudah +400%. Urutan <b>€</b> memunculkan target yang benar-benar '
-                'material.</div>', unsafe_allow_html=True)
 
     bargains = insights.market_scan(DF, side="BARGAIN", sort_by=sort_mode, limit=12, **FILTERS)
     overpriced = insights.market_scan(DF, side="OVERPRICED", sort_by=sort_mode, limit=12,
@@ -204,11 +205,11 @@ def render_scanner() -> None:
 
     col_a, col_b = st.columns(2, gap="large")
     with col_a:
-        ui.section("Paling undervalued", "estimasi model jauh di atas harga")
+        ui.section("Paling undervalued", "estimasi model di atas harga pasar")
         st.markdown(ui.stack([ui.mini_card(row) for _, row in bargains.iterrows()]),
                     unsafe_allow_html=True)
     with col_b:
-        ui.section("Paling overpriced", "harga jauh di atas estimasi")
+        ui.section("Paling overpriced", "harga pasar di atas estimasi model")
         st.markdown(ui.stack([ui.mini_card(row) for _, row in overpriced.iterrows()]),
                     unsafe_allow_html=True)
 
@@ -235,7 +236,9 @@ def render_scanner() -> None:
 
 # ----------------------------------------------------------------- tab 3
 def render_compare() -> None:
-    ui.section("Head to head", "bandingkan dua kartu sekaligus valuasinya")
+    ui.tab_intro("Dua kartu berdampingan beserta valuasinya. Kolom tengah meringkas "
+                 "selisih harga, posisi masing-masing terhadap estimasi model, dan "
+                 "beda rating.")
     labels = list(OPTIONS.index)
     c1, c2 = st.columns(2)
     with c1:
@@ -258,12 +261,14 @@ def render_compare() -> None:
             ("Harga A", ui.money(row_a["value_eur"]), str(row_a["short_name"])),
             ("Harga B", ui.money(row_b["value_eur"]), str(row_b["short_name"])),
             ("Selisih harga", ui.money(row_a["value_eur"] - row_b["value_eur"]), "A − B"),
-            ("Gap AI A", ui.pct(row_a["gap_pct"]), row_a["verdict"]),
-            ("Gap AI B", ui.pct(row_b["gap_pct"]), row_b["verdict"]),
             ("Beda OVR", f"{int(row_a['ovr']) - int(row_b['ovr']):+d}", "A − B"),
+            ("Gap A vs estimasi", ui.pct(row_a["gap_pct"]), row_a["verdict"]),
+            ("Gap B vs estimasi", ui.pct(row_b["gap_pct"]), row_b["verdict"]),
         ]), unsafe_allow_html=True)
 
-    st.plotly_chart(ui.compare_bars(row_a, row_b), width="stretch", key="cmp_bars", config=ui.CHART_CONFIG)
+    ui.section("Perbandingan atribut", "enam stat kartu, angka pastinya ada di tabel")
+    st.plotly_chart(ui.compare_bars(row_a, row_b), width="stretch", key="cmp_bars",
+                    config=ui.CHART_CONFIG)
 
     diff = pd.DataFrame({
         "Atribut": [ATTR_LABEL[c] for c in CARD_STATS],
@@ -276,10 +281,13 @@ def render_compare() -> None:
 
 # ----------------------------------------------------------------- tab 4
 def render_insights() -> None:
+    ui.tab_intro("Pola agregat dari seluruh dataset, plus laporan seberapa akurat "
+                 "model ini sebenarnya.")
     ui.section("Kurva umur", "median harga per umur — memakai seluruh 26 ribu snapshot")
     curve = insights.age_curve(DF, sel_groups or None)
     peak = insights.peak_age(curve)
-    st.plotly_chart(ui.age_curve_chart(curve, peak), width="stretch", key="age_curve", config=ui.CHART_CONFIG)
+    st.plotly_chart(ui.age_curve_chart(curve, peak), width="stretch", key="age_curve",
+                    config=ui.CHART_CONFIG)
 
     col1, col2 = st.columns([1.1, 1], gap="large")
     with col1:
@@ -302,9 +310,9 @@ def render_insights() -> None:
                 ("R² holdout", f"{honest['r2']:.3f}", f"{ui.count(honest['n'])} baris uji"),
                 ("Median error", f"{honest['median_ape_pct']:.1f}%", "out-of-sample"),
                 ("Dalam ±20%", f"{honest['within_20pct']:.0f}%", "prediksi"),
-                ("R² in-sample", f"{insample['r2']:.3f}", "angka yang menipu"),
-                ("Error in-sample", f"{insample['median_ape_pct']:.1f}%", "di data latih"),
-                ("Baseline", f"{base['median_ape_pct']:.0f}%", "median harga saja"),
+                ("R² in-sample", f"{insample['r2']:.3f}", "angka yang menipu", True),
+                ("Error in-sample", f"{insample['median_ape_pct']:.1f}%", "di data latih", True),
+                ("Baseline", f"{base['median_ape_pct']:.0f}%", "median harga saja", True),
             ]), unsafe_allow_html=True)
             st.markdown(
                 f'<div class="fc-note" style="margin-top:10px">Split '
@@ -338,7 +346,9 @@ def render_insights() -> None:
 
 # ----------------------------------------------------------------- tab 5
 def render_audit() -> None:
-    ui.section("Data audit", "apa yang diperbaiki dari CSV mentah")
+    ui.tab_intro("Laporan terbuka soal apa yang diperbaiki dari CSV mentah, dan apa "
+                 "yang masih jadi keterbatasan.")
+    ui.section("Ringkasan", "sebelum dan sesudah pembersihan")
     st.markdown(ui.tiles([
         ("Baris mentah", ui.count(DQ.rows_raw), "data_pemain_siap_pakai.csv"),
         ("Baris dipakai", ui.count(DQ.rows_used), f"{DQ.rows_used / DQ.rows_raw * 100:.1f}% dari mentah"),
