@@ -8,6 +8,7 @@ Jalankan:  streamlit run app.py
 from __future__ import annotations
 
 import math
+from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -19,11 +20,11 @@ from fcv.config import (ATTR_LABEL, CARD_STATS, GROUP_LABEL, STAT_DETAIL,
                         TIER_LABEL)
 
 st.set_page_config(page_title="Football Valuation Centre", page_icon="⚽",
-                   layout="wide", initial_sidebar_state="expanded")
+                   layout="wide")
 
 
 # ----------------------------------------------------------------- loader
-@st.cache_resource(show_spinner="Memuat model Random Forest (157 MB)...")
+@st.cache_resource(show_spinner="Menyiapkan estimasi pemain...")
 def get_model():
     return fcv_model.load_model()
 
@@ -71,71 +72,61 @@ def reset_market_filters() -> None:
     st.session_state.market_ovr = DEFAULT_MIN_OVR
 
 ui.inject_css()
-model_note = (f"±{METRICS['holdout_fresh_model']['median_ape_pct']:.0f}%"
-              if METRICS else "RF 100 pohon")
+model_note = (f"{METRICS['holdout_fresh_model']['median_ape_pct']:.0f}%"
+              if METRICS else "Belum tersedia")
 ui.app_header(DQ, model_note)
 
 
-# ----------------------------------------------------------------- sidebar
-with st.sidebar:
-    st.markdown('<div class="fc-sec"><span class="fc-sec__bar"></span>'
-                '<span class="fc-sec__title">Scouting Room</span></div>',
-                unsafe_allow_html=True)
+# ---------------------------------------------------------- scoped controls
+def render_player_picker():
+    with st.container(border=True, key="player_picker"):
+        c1, c2 = st.columns([1.5, 1], gap="medium")
+        with c1:
+            label = st.selectbox("Cari pemain", OPTIONS.index, key="hub_player",
+                                 help="Ketik nama atau klub. Urutan awal berdasarkan OVR estimasi.")
+        key = OPTIONS[label]
+        rows = DF.loc[DF["player_key"] == key].sort_values("snapshot_index")
+        with c2:
+            snapshot = st.selectbox(
+                "Snapshot pemain", rows.index, index=len(rows) - 1,
+                key=f"snapshot_{key}",
+                format_func=lambda i: f"{int(rows.loc[i, 'age'])} tahun · "
+                f"{rows.loc[i, 'club_name']} · #{int(rows.loc[i, 'snapshot_index'])}",
+                help="Default: umur tertinggi. Nomor snapshot membedakan baris berumur sama; tahun edisi tidak tersedia.",
+            )
+        st.caption("Pilih pemain dan snapshot untuk melihat profil. OVR adalah estimasi; data bukan harga transfer terkini.")
+    return label, key, rows.loc[snapshot]
 
-    picked_label = st.selectbox("Cari pemain", OPTIONS.index, index=0,
-                               help="Diurutkan dari OVR estimasi tertinggi.")
-    player_key = OPTIONS[picked_label]
 
-    player_rows = DF.loc[DF["player_key"] == player_key].sort_values("age")
-    ages = player_rows["age"].tolist()
-    snapshot_age = st.select_slider(
-        "Snapshot umur", options=ages, value=ages[-1],
-        help="Setiap baris data = satu edisi/musim. Semua dipakai, bukan cuma yang termahal.",
-    ) if len(ages) > 1 else ages[0]
-
-    st.divider()
-    st.markdown('<div class="fc-sec"><span class="fc-sec__bar"></span>'
-                '<span class="fc-sec__title">Filter Pasar</span></div>',
-                unsafe_allow_html=True)
-
-    sel_leagues = st.multiselect("Liga", LEAGUE_CHOICES, default=DEFAULT_LEAGUES,
-                                 key="market_leagues")
-    sel_groups = st.multiselect("Lini", DEFAULT_GROUPS, default=DEFAULT_GROUPS,
-                                format_func=lambda g: GROUP_LABEL[g], key="market_groups")
-    age_lo, age_hi = st.slider("Rentang umur", DQ.age_min, DQ.age_max,
-                               DEFAULT_AGE_RANGE, key="market_age")
-    val_lo, val_hi = st.slider("Harga pasar (juta €)", 0.0,
-                               float(LATEST["value_m"].max().round()), DEFAULT_VALUE_RANGE,
-                               step=0.5, key="market_value")
-    min_ovr = st.slider("OVR minimum", 40, 99, DEFAULT_MIN_OVR, key="market_ovr")
-
-    market_mask = (
-        LATEST["league_name"].isin(sel_leagues)
-        & LATEST["position_group"].isin(sel_groups)
-        & LATEST["age"].between(age_lo, age_hi)
-        & LATEST["value_m"].between(val_lo, val_hi)
-        & (LATEST["ovr"] >= min_ovr)
-    )
-    filtered_players = int(market_mask.sum())
-    result_class = "is-empty" if filtered_players == 0 else ""
-    st.markdown(
-        f'<div class="fc-filter-result {result_class}"><span>Hasil filter</span>'
-        f'<b>{ui.count(filtered_players)} pemain</b>'
-        f'<small>dari {ui.count(len(LATEST))} snapshot terbaru</small></div>',
-        unsafe_allow_html=True,
-    )
-    st.button("Reset filter pasar", on_click=reset_market_filters,
-              use_container_width=True, type="tertiary")
-
-selected = player_rows.loc[player_rows["age"] == snapshot_age].iloc[0]
-group_peers = LATEST.loc[LATEST["position_group"] == selected["position_group"]]
-FILTERS = dict(leagues=sel_leagues, groups=sel_groups, age_range=(age_lo, age_hi),
-               value_range=(val_lo, val_hi), min_ovr=min_ovr)
+def render_market_filters() -> pd.DataFrame:
+    with st.expander("Filter pasar", expanded=True):
+        st.caption("Hanya berlaku di Market Scanner. Pilih minimal satu liga dan satu lini.")
+        c1, c2 = st.columns(2, gap="medium")
+        with c1:
+            leagues = st.multiselect("Liga", LEAGUE_CHOICES, default=DEFAULT_LEAGUES,
+                                     key="market_leagues", placeholder="Pilih liga")
+        with c2:
+            groups = st.multiselect("Lini", DEFAULT_GROUPS, default=DEFAULT_GROUPS,
+                                    format_func=lambda g: GROUP_LABEL[g], key="market_groups",
+                                    placeholder="Pilih lini")
+        c1, c2, c3 = st.columns(3, gap="medium")
+        with c1:
+            age_range = st.slider("Rentang umur", DQ.age_min, DQ.age_max,
+                                  DEFAULT_AGE_RANGE, key="market_age")
+        with c2:
+            value_range = st.slider("Harga pasar (juta €)", 0.0,
+                                    float(LATEST["value_m"].max().round()), DEFAULT_VALUE_RANGE,
+                                    step=0.5, key="market_value")
+        with c3:
+            ovr = st.slider("OVR minimum", 40, 99, DEFAULT_MIN_OVR, key="market_ovr")
+        st.button("Reset filter pasar", on_click=reset_market_filters, key="reset_market")
+    return insights.market_pool(DF, leagues=leagues, groups=groups,
+                                age_range=age_range, value_range=value_range, min_ovr=ovr)
 
 
 # ----------------------------------------------------------------- tab 1
 def render_player_hub() -> None:
-    ui.tab_intro(f"Kartu <b>{selected['short_name']}</b> pada snapshot umur "
+    ui.tab_intro(f"Kartu <b>{escape(selected['short_name'])}</b> pada snapshot umur "
                  f"{int(selected['age'])}, beserta posisi harganya terhadap estimasi model.")
     left, right = st.columns([0.86, 1.5], gap="large")
 
@@ -158,7 +149,7 @@ def render_player_hub() -> None:
             ("Gap", ui.pct(selected["gap_pct"]), "estimasi vs harga pasar"),
             ("OVR est.", str(int(selected["ovr"])),
              f"persentil {selected['pct_ovr']:.0f} di antara "
-             f"{ui.count(len(group_peers))} pemain selini"),
+             f"{ui.count((DF['position_group'] == selected['position_group']).sum())} snapshot selini"),
         ]), unsafe_allow_html=True)
 
         c1, c2 = st.columns([1, 1], gap="medium")
@@ -170,14 +161,14 @@ def render_player_hub() -> None:
                             config=ui.CHART_CONFIG)
         with c2:
             st.markdown('<div class="fc-note" style="margin:10px 0 14px">'
-                        'Angka atribut dan persentilnya dibanding pemain selini.</div>',
+                        'Nilai atribut · P = persentil di lini yang sama. '
+                        'P90 berarti melampaui sekitar 90% snapshot pembanding.</div>',
                         unsafe_allow_html=True)
             st.markdown(ui.percentile_bars(selected), unsafe_allow_html=True)
 
     timeline_df = insights.career_timeline(DF, player_key)
     if len(timeline_df) > 1:
-        ui.section("Lini waktu karier", f"{len(timeline_df)} snapshot dipakai — "
-                                       "inilah data yang dibuang versi lama app")
+        ui.section("Lini waktu karier", f"{len(timeline_df)} snapshot · diurutkan berdasarkan umur, bukan tahun edisi")
         st.plotly_chart(ui.timeline(timeline_df, selected["short_name"]),
                         width="stretch", key="timeline_hub", config=ui.CHART_CONFIG)
 
@@ -197,7 +188,7 @@ def render_player_hub() -> None:
             f'<div class="fc-bars" style="margin-top:10px">{rows}</div></div>')
     st.markdown(ui.grid(detail_cards, 3), unsafe_allow_html=True)
 
-    ui.section("Profil serupa", "jarak euclidean atribut ter-standardisasi, satu lini")
+    ui.section("Profil serupa", "enam profil terdekat berdasarkan atribut dan lini bermain")
     similar = insights.similar_players(DF, selected, k=6)
     if similar.empty:
         st.info("Tidak ada pembanding di lini ini.")
@@ -210,48 +201,56 @@ def render_player_hub() -> None:
 
 # ----------------------------------------------------------------- tab 2
 def render_scanner() -> None:
-    ui.tab_intro("Seluruh snapshot terbaru dinilai model sekaligus, bukan satu pemain. "
-                 "Urutan <b>%</b> didominasi pemain sangat murah — selisih €500 rb pada "
-                 "pemain €120 rb sudah +400%. Urutan <b>€</b> memunculkan target yang "
-                 "benar-benar material.")
-    sort_mode = st.radio("Urutkan", ["abs", "pct"], horizontal=True, key="scan_sort",
-                         format_func=lambda m: "Selisih €" if m == "abs" else "Selisih %")
-
-    bargains = insights.market_scan(DF, side="BARGAIN", sort_by=sort_mode, limit=12, **FILTERS)
-    overpriced = insights.market_scan(DF, side="OVERPRICED", sort_by=sort_mode, limit=12,
-                                      **FILTERS)
-
-    if bargains.empty and overpriced.empty:
-        st.warning("Tidak ada pemain yang lolos filter. Lebarkan rentang di sidebar.")
+    ui.tab_intro("Temukan kandidat dari snapshot umur tertinggi setiap pemain. "
+                 "Atur filter, lalu bandingkan harga pasar dengan estimasi model.")
+    pool = render_market_filters()
+    st.markdown(ui.filter_result(len(pool), len(LATEST)), unsafe_allow_html=True)
+    if pool.empty:
+        st.info("Belum ada pemain yang cocok. Pilih minimal satu liga dan lini, "
+                "turunkan OVR minimum, atau lebarkan rentang umur dan harga.")
+        st.button("Kembalikan filter awal", on_click=reset_market_filters, key="empty_reset",
+                  type="primary")
         return
 
-    pool = insights.market_scan(DF, side="BARGAIN", limit=100_000, **FILTERS)
+    sort_mode = st.radio("Urutkan", ["abs", "pct"], horizontal=True, key="scan_sort",
+                         format_func=lambda m: "Selisih €" if m == "abs" else "Selisih %",
+                         help="Euro mengutamakan selisih nominal. Persen mengutamakan selisih relatif dan sering menyorot pemain murah.")
+
+    bargains = insights.market_scan(pool, side="BARGAIN", sort_by=sort_mode, limit=12)
+    overpriced = insights.market_scan(pool, side="OVERPRICED", sort_by=sort_mode, limit=12)
     st.markdown(ui.tiles([
         ("Pemain terfilter", ui.count(len(pool)), "snapshot terbaru"),
         ("Bargain", ui.count((pool["verdict"] == "BARGAIN").sum()),
          f"{(pool['verdict'] == 'BARGAIN').mean() * 100:.0f}% dari pool"),
         ("Overpriced", ui.count((pool["verdict"] == "OVERPRICED").sum()),
          f"{(pool['verdict'] == 'OVERPRICED').mean() * 100:.0f}% dari pool"),
+        ("Fair value", ui.count((pool["verdict"] == "FAIR").sum()), "di antara dua ambang verdict"),
         ("Nilai pasar pool", ui.money(pool["value_eur"].sum()), "total"),
-        ("Gap median", ui.pct(pool["gap_pct"].median()), "estimasi vs pasar"),
     ]), unsafe_allow_html=True)
+    st.caption("Kartu menampilkan harga pasar, selisih € dan %. Verdict adalah sinyal relatif model; lihat batasannya di Insights.")
 
     col_a, col_b = st.columns(2, gap="large")
     with col_a:
-        ui.section("Paling undervalued", "estimasi model di atas harga pasar")
-        st.markdown(ui.stack([ui.mini_card(row) for _, row in bargains.iterrows()]),
-                    unsafe_allow_html=True)
+        ui.section("Bargain", f"{len(bargains)} kandidat · gap minimal {ui.pct(math.expm1(HIGH) * 100, 0)}")
+        if bargains.empty:
+            st.info("Tidak ada kandidat bargain pada filter ini. Pemain fair value tetap ada di peta pasar.")
+        else:
+            st.markdown(ui.stack([ui.mini_card(row) for _, row in bargains.iterrows()]),
+                        unsafe_allow_html=True)
     with col_b:
-        ui.section("Paling overpriced", "harga pasar di atas estimasi model")
-        st.markdown(ui.stack([ui.mini_card(row) for _, row in overpriced.iterrows()]),
-                    unsafe_allow_html=True)
+        ui.section("Overpriced", f"{len(overpriced)} kandidat · gap maksimal {ui.pct(math.expm1(LOW) * 100, 0)}")
+        if overpriced.empty:
+            st.info("Tidak ada kandidat overpriced pada filter ini. Pemain fair value tetap ada di peta pasar.")
+        else:
+            st.markdown(ui.stack([ui.mini_card(row) for _, row in overpriced.iterrows()]),
+                        unsafe_allow_html=True)
 
     ui.section("Peta pasar", "garis putus = harga sama dengan estimasi model")
-    st.plotly_chart(ui.market_scatter(pool, selected), width="stretch", key="scatter_scan",
+    st.plotly_chart(ui.market_scatter(pool), width="stretch", key="scatter_scan",
                     config=ui.CHART_CONFIG)
 
-    ui.section("Papan liga", "agregat snapshot terbaru per kompetisi")
-    table = insights.league_table(DF)
+    ui.section("Papan liga", "mengikuti filter pasar yang sama")
+    table = insights.league_table(pool)
     st.dataframe(
         table.rename(columns={
             "league_name": "Liga", "country": "Negara", "pemain": "Pemain", "klub": "Klub",
@@ -263,38 +262,38 @@ def render_scanner() -> None:
             "Nilai median (jt €)": st.column_config.NumberColumn(format="%.1f"),
             "Total (jt €)": st.column_config.NumberColumn(format="%.0f"),
             "% bargain": st.column_config.ProgressColumn(format="%.0f%%", min_value=0,
-                                                         max_value=60),
+                                                         max_value=100),
         })
 
 
 # ----------------------------------------------------------------- tab 3
 def render_compare() -> None:
-    ui.tab_intro("Dua kartu berdampingan beserta valuasinya. Kolom tengah meringkas "
-                 "selisih harga, posisi masing-masing terhadap estimasi model, dan "
-                 "beda rating.")
+    ui.tab_intro("Bandingkan dua entri pemain pada snapshot umur tertinggi masing-masing. "
+                 "Pilihan di sini terpisah dari filter pasar.")
     labels = list(OPTIONS.index)
     c1, c2 = st.columns(2)
     with c1:
-        label_a = st.selectbox("Pemain A", labels, index=labels.index(picked_label),
+        label_a = st.selectbox("Pemain A", labels, index=0,
                                key="cmp_a")
     with c2:
-        label_b = st.selectbox("Pemain B", labels, index=1 if labels[1] != label_a else 2,
+        label_b = st.selectbox("Pemain B", labels, index=1,
                                key="cmp_b")
 
-    row_a = DF.loc[DF["player_key"] == OPTIONS[label_a]].sort_values("age").iloc[-1]
-    row_b = DF.loc[DF["player_key"] == OPTIONS[label_b]].sort_values("age").iloc[-1]
+    row_a = LATEST.loc[LATEST["player_key"] == OPTIONS[label_a]].iloc[0]
+    row_b = LATEST.loc[LATEST["player_key"] == OPTIONS[label_b]].iloc[0]
 
     if label_a == label_b:
         st.warning("Pilih dua pemain berbeda agar perbandingan atribut dan valuasi bermakna.")
         return
 
-    card_a, mid, card_b = st.columns([1, 1.25, 1], gap="large")
+    card_a, card_b = st.columns(2, gap="large")
     with card_a:
+        ui.section("Pemain A", f"{row_a['short_name']} · {int(row_a['age'])} tahun")
         st.markdown(ui.player_card(row_a), unsafe_allow_html=True)
     with card_b:
+        ui.section("Pemain B", f"{row_b['short_name']} · {int(row_b['age'])} tahun")
         st.markdown(ui.player_card(row_b), unsafe_allow_html=True)
-    with mid:
-        st.markdown(ui.tiles([
+    st.markdown(ui.tiles([
             ("Harga A", ui.money(row_a["value_eur"]), str(row_a["short_name"])),
             ("Harga B", ui.money(row_b["value_eur"]), str(row_b["short_name"])),
             ("Selisih harga", ui.money(row_a["value_eur"] - row_b["value_eur"]), "A − B"),
@@ -307,12 +306,7 @@ def render_compare() -> None:
     st.plotly_chart(ui.compare_bars(row_a, row_b), width="stretch", key="cmp_bars",
                     config=ui.CHART_CONFIG)
 
-    diff = pd.DataFrame({
-        "Atribut": [ATTR_LABEL[c] for c in CARD_STATS],
-        row_a["short_name"]: [int(row_a[c]) for c in CARD_STATS],
-        row_b["short_name"]: [int(row_b[c]) for c in CARD_STATS],
-    })
-    diff["Selisih"] = diff[row_a["short_name"]] - diff[row_b["short_name"]]
+    diff = insights.comparison_table(row_a, row_b)
     st.dataframe(diff, width="stretch", hide_index=True)
 
 
@@ -320,11 +314,18 @@ def render_compare() -> None:
 def render_insights() -> None:
     ui.tab_intro("Pola agregat dari seluruh dataset, plus laporan seberapa akurat "
                  "model ini sebenarnya.")
+    insight_groups = st.multiselect("Lini untuk analisis", DEFAULT_GROUPS,
+                                    default=DEFAULT_GROUPS, key="insight_groups",
+                                    format_func=lambda g: GROUP_LABEL[g],
+                                    help="Hanya memengaruhi kurva umur dan papan atas atribut.")
     ui.section("Kurva umur", "median harga per umur — memakai seluruh 26 ribu snapshot")
-    curve = insights.age_curve(DF, sel_groups or None)
+    curve = insights.age_curve(DF, insight_groups)
     peak = insights.peak_age(curve)
-    st.plotly_chart(ui.age_curve_chart(curve, peak), width="stretch", key="age_curve",
-                    config=ui.CHART_CONFIG)
+    if curve.empty:
+        st.info("Pilih minimal satu lini untuk menampilkan kurva umur.")
+    else:
+        st.plotly_chart(ui.age_curve_chart(curve, peak), width="stretch", key="age_curve",
+                        config=ui.CHART_CONFIG)
 
     col1, col2 = st.columns([1.1, 1], gap="large")
     with col1:
@@ -355,23 +356,26 @@ def render_insights() -> None:
                 f'<div class="fc-note" style="margin-top:10px">Split '
                 f'<span class="fc-kbd">group by pemain</span> supaya snapshot umur '
                 f'berbeda dari orang yang sama tidak bocor antara latih dan uji. '
-                f'Model ter-ship dilatih di seluruh baris, jadi angka '
-                f'{insample["median_ape_pct"]:.0f}% yang terlihat di kartu adalah '
-                f'in-sample; error sebenarnya sekitar '
-                f'{honest["median_ape_pct"]:.0f}%. Verdict BARGAIN/OVERPRICED karena itu '
+                f'Model yang disertakan dilatih di seluruh baris. Median error '
+                f'{insample["median_ape_pct"]:.0f}% pada data latih terlalu optimistis; '
+                f'hasil holdout pembanding adalah {honest["median_ape_pct"]:.0f}%. '
+                f'Ini median error, bukan jaminan rentang prediksi. Verdict BARGAIN/OVERPRICED '
                 f'dibaca sebagai peringkat relatif (kuantil 15/85 residual), bukan '
                 f'klaim absolut.</div>', unsafe_allow_html=True)
         else:
             st.info("Jalankan `python scripts/evaluate_model.py` untuk mengisi panel ini.")
 
     ui.section("Sebaran harga pasar", "skala log, snapshot terbaru")
-    st.plotly_chart(ui.value_hist(insights.value_distribution(DF), selected["value_eur"]),
+    st.plotly_chart(ui.value_hist(insights.value_distribution(DF)),
                     width="stretch", key="value_hist", config=ui.CHART_CONFIG)
 
     ui.section("Papan atas atribut", "snapshot terbaru, mengikuti filter lini")
     stat_pick = st.selectbox("Atribut", CARD_STATS + ["ovr", "movement_reactions"],
                             format_func=lambda c: ATTR_LABEL.get(c, c), key="stat_pick")
-    leaders = insights.stat_leaders(DF, stat_pick, 10, sel_groups or None)
+    leaders = insights.stat_leaders(DF, stat_pick, 10, insight_groups)
+    if leaders.empty:
+        st.info("Pilih minimal satu lini untuk menampilkan papan atas atribut.")
+        return
     st.dataframe(
         leaders.rename(columns={
             "short_name": "Pemain", "club_name": "Klub", "position_main": "Posisi",
@@ -445,6 +449,8 @@ def render_audit() -> None:
 # ----------------------------------------------------------------- render
 TABS = st.tabs(["PLAYER HUB", "MARKET SCANNER", "HEAD TO HEAD", "INSIGHTS", "DATA AUDIT"])
 with TABS[0]:
+    picked_label, player_key, selected = render_player_picker()
+    group_peers = LATEST.loc[LATEST["position_group"] == selected["position_group"]]
     render_player_hub()
 with TABS[1]:
     render_scanner()

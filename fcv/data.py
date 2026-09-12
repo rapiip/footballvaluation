@@ -109,10 +109,12 @@ def build_dataset(path=DATA_CSV) -> tuple[pd.DataFrame, DataQuality]:
     df["log_value"] = np.log(df["value_eur"])
 
     # Snapshot terbaru per pemain (umur tertinggi) = kartu default.
-    df = df.sort_values(["player_key", "age"])
+    df = df.sort_values(["player_key", "age"], kind="stable")
     df["snapshot_index"] = df.groupby("player_key").cumcount() + 1
     df["snapshot_total"] = df.groupby("player_key")["age"].transform("size")
-    df["is_latest"] = df["age"] == df.groupby("player_key")["age"].transform("max")
+    # Jika umur sama, pilih baris terakhir secara deterministik. Semua snapshot
+    # tetap tersedia di picker; tahun edisi memang tidak tersedia di sumber.
+    df["is_latest"] = df["snapshot_index"] == df["snapshot_total"]
 
     # Label yang enak dibaca di dropdown: nama, klub snapshot terbaru, posisi.
     latest = df.loc[df["is_latest"]].drop_duplicates("player_key").set_index("player_key")

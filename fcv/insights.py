@@ -9,6 +9,30 @@ from .config import CARD_STATS
 SIMILARITY_COLS = CARD_STATS + ["movement_reactions", "mentality_composure", "age"]
 
 
+def market_pool(df: pd.DataFrame,
+                leagues: list[str] | None = None,
+                groups: list[str] | None = None,
+                age_range: tuple[int, int] | None = None,
+                value_range: tuple[float, float] | None = None,
+                min_ovr: int = 0,
+                latest_only: bool = True) -> pd.DataFrame:
+    """Satu sumber hasil filter. None = semua, pilihan [] = tidak ada hasil."""
+    scan = df
+    if latest_only:
+        scan = scan.loc[scan["is_latest"]]
+    if leagues is not None:
+        scan = scan.loc[scan["league_name"].isin(leagues)]
+    if groups is not None:
+        scan = scan.loc[scan["position_group"].isin(groups)]
+    if age_range:
+        scan = scan.loc[scan["age"].between(*age_range)]
+    if value_range:
+        scan = scan.loc[scan["value_m"].between(*value_range)]
+    if min_ovr:
+        scan = scan.loc[scan["ovr"] >= min_ovr]
+    return scan.copy()
+
+
 def market_scan(df: pd.DataFrame,
                 leagues: list[str] | None = None,
                 groups: list[str] | None = None,
@@ -19,25 +43,13 @@ def market_scan(df: pd.DataFrame,
                 side: str = "BARGAIN",
                 sort_by: str = "abs",
                 limit: int = 25) -> pd.DataFrame:
-    """Cari pemain paling salah harga menurut model, dengan filter pasar.
+    """Peringkat hanya berisi verdict yang diminta, sesudah filter pasar.
 
-    `sort_by="abs"` mengurutkan berdasarkan selisih rupiah/euro, `"pct"`
-    berdasarkan rasio. Pengurutan persen didominasi pemain super murah
-    (selisih €500 rb pada pemain €120 rb = +400%), jadi default-nya absolut.
+    Euro menyorot selisih nominal; persen menyorot selisih relatif.
+    Gunakan market_pool untuk ringkasan semua verdict dan peta pasar.
     """
-    scan = df
-    if latest_only:
-        scan = scan.loc[scan["is_latest"]]
-    if leagues:
-        scan = scan.loc[scan["league_name"].isin(leagues)]
-    if groups:
-        scan = scan.loc[scan["position_group"].isin(groups)]
-    if age_range:
-        scan = scan.loc[scan["age"].between(*age_range)]
-    if value_range:
-        scan = scan.loc[scan["value_m"].between(*value_range)]
-    if min_ovr:
-        scan = scan.loc[scan["ovr"] >= min_ovr]
+    scan = market_pool(df, leagues, groups, age_range, value_range, min_ovr, latest_only)
+    scan = scan.loc[scan["verdict"] == side]
 
     column = "gap_eur" if sort_by == "abs" else "log_ratio"
     ascending = side == "OVERPRICED"
@@ -68,7 +80,7 @@ def similar_players(df: pd.DataFrame, row: pd.Series, k: int = 6) -> pd.DataFram
 
 def age_curve(df: pd.DataFrame, groups: list[str] | None = None) -> pd.DataFrame:
     """Median harga & OVR per umur — memanfaatkan seluruh snapshot, bukan satu per pemain."""
-    scan = df if not groups else df.loc[df["position_group"].isin(groups)]
+    scan = df if groups is None else df.loc[df["position_group"].isin(groups)]
     curve = scan.groupby("age").agg(
         median_value_m=("value_m", "median"),
         p90_value_m=("value_m", lambda s: s.quantile(0.9)),
@@ -119,11 +131,25 @@ def club_table(df: pd.DataFrame, league: str, limit: int = 20) -> pd.DataFrame:
 def stat_leaders(df: pd.DataFrame, stat: str, limit: int = 10,
                  groups: list[str] | None = None) -> pd.DataFrame:
     latest = df.loc[df["is_latest"]]
-    if groups:
+    if groups is not None:
         latest = latest.loc[latest["position_group"].isin(groups)]
     return latest.nlargest(limit, stat)[
-        ["short_name", "club_name", "position_main", "age", "ovr", stat, "value_m"]
+        list(dict.fromkeys(["short_name", "club_name", "position_main", "age", "ovr", stat, "value_m"]))
     ]
+
+
+def comparison_table(a: pd.Series, b: pd.Series) -> pd.DataFrame:
+    """Kolom A/B tetap unik meskipun dua entri memiliki nama pendek sama."""
+    from .config import ATTR_LABEL
+
+    values_a = a[CARD_STATS].astype(int).to_numpy()
+    values_b = b[CARD_STATS].astype(int).to_numpy()
+    return pd.DataFrame({
+        "Atribut": [ATTR_LABEL[stat] for stat in CARD_STATS],
+        f"A · {a['short_name']}": values_a,
+        f"B · {b['short_name']}": values_b,
+        "Selisih A − B": values_a - values_b,
+    })
 
 
 def value_distribution(df: pd.DataFrame, bins: int = 40) -> pd.DataFrame:

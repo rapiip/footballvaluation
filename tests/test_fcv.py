@@ -184,6 +184,7 @@ def test_every_player_has_one_latest_snapshot(real_dataset):
     df, _ = real_dataset
     latest = df.loc[df["is_latest"]].drop_duplicates("player_key")
     assert len(latest) == df["player_key"].nunique()
+    assert df.loc[df["is_latest"], "player_key"].is_unique
     assert df["player_label"].notna().all()
 
 
@@ -221,11 +222,41 @@ def test_market_scan_sort_modes_differ():
     df["gap_eur"] = [930_000.0, 30_500_000.0]
     df["log_ratio"] = np.log([1_050_000 / 120_000, 103_500_000 / 73_000_000])
     df["value_m"] = df["value_eur"] / 1e6
+    df["verdict"] = "BARGAIN"
 
     by_pct = insights.market_scan(df, side="BARGAIN", sort_by="pct", limit=1)
     by_abs = insights.market_scan(df, side="BARGAIN", sort_by="abs", limit=1)
     assert by_pct.iloc[0]["short_name"] == "P0"
     assert by_abs.iloc[0]["short_name"] == "P1"
+
+
+def test_market_pool_and_rankings_use_consistent_selection():
+    df = pd.DataFrame({
+        "league_name": ["La Liga"] * 3, "position_group": ["ATT"] * 3,
+        "is_latest": [True] * 3, "age": [24] * 3, "value_m": [10.0] * 3,
+        "ovr": [80] * 3, "gap_eur": [4e6, 1e6, -4e6],
+        "log_ratio": [0.4, 0.1, -0.4], "verdict": ["BARGAIN", "FAIR", "OVERPRICED"],
+    })
+    assert len(insights.market_pool(df)) == 3
+    assert insights.market_pool(df, leagues=[]).empty
+    assert insights.market_pool(df, groups=[]).empty
+    assert insights.market_pool(df, min_ovr=99).empty
+    assert insights.market_scan(df).verdict.tolist() == ["BARGAIN"]
+    assert insights.market_scan(df, side="OVERPRICED").verdict.tolist() == ["OVERPRICED"]
+    fair_pool = df.loc[df.verdict == "FAIR"]
+    assert not insights.market_pool(fair_pool).empty
+    assert insights.market_scan(fair_pool).empty
+    assert insights.market_scan(fair_pool, side="OVERPRICED").empty
+
+
+def test_comparison_keeps_distinct_entries_with_same_short_name():
+    a = pd.Series(make_row(short_name="Danilo", pace=82, shooting=70))
+    b = pd.Series(make_row(short_name="Danilo", pace=71, shooting=40))
+    table = insights.comparison_table(a, b)
+    assert table.columns.is_unique
+    assert table["A · Danilo"].iloc[0] == 82
+    assert table["B · Danilo"].iloc[0] == 71
+    assert table["Selisih A − B"].iloc[0] == 11
 
 
 def test_age_curve_has_a_plausible_peak(real_dataset):
