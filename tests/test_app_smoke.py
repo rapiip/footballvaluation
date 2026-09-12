@@ -33,6 +33,7 @@ def test_all_tabs_present(app: AppTest):
 def test_sidebar_controls_exist(app: AppTest):
     assert any(s.label == "Cari pemain" for s in app.sidebar.selectbox)
     assert any(s.label == "Liga" for s in app.sidebar.multiselect)
+    assert any(b.label == "Reset filter pasar" for b in app.sidebar.button)
 
 
 def test_charts_and_cards_rendered(app: AppTest):
@@ -45,3 +46,9 @@ def test_charts_and_cards_rendered(app: AppTest):
 def test_switching_player_keeps_app_healthy(app: AppTest):
     app.sidebar.selectbox[0].select_index(5).run()
     assert not app.exception, [e.value for e in app.exception]
+
+
+def test_same_player_comparison_shows_guidance(app: AppTest):
+    comparison_selects = [s for s in app.selectbox if s.label in {"Pemain A", "Pemain B"}]
+    comparison_selects[1].select(comparison_selects[0].value).run()
+    assert any("dua pemain berbeda" in warning.value for warning in app.warning)

@@ -157,7 +157,8 @@ def player_card(row: pd.Series, show_ribbon: bool = True) -> str:
         ribbon = (f'<div class="fc-card__ribbon fc-card__ribbon--{key}">'
                   f'{escape(VERDICT_TEXT[row["verdict"]][0])}</div>')
     return (
-        f'<div class="fc-card fc-card--{tier}">{ribbon}'
+        f'<article class="fc-card fc-card--{tier}" aria-label="Kartu pemain '
+        f'{escape(str(row["short_name"]))}, OVR {int(row["ovr"])}">{ribbon}'
         f'<div class="fc-card__body"><div class="fc-card__shine"></div>'
         f'<div class="fc-card__head"><div class="fc-card__id">'
         f'<div class="fc-card__ovr">{int(row["ovr"])}</div>'
@@ -172,7 +173,7 @@ def player_card(row: pd.Series, show_ribbon: bool = True) -> str:
         f'<div class="fc-card__club">{escape(str(row["club_name"]))}</div>'
         f'<div class="fc-card__stats">{stats}</div>'
         f'<div class="fc-card__foot">{escape(str(row.get("league_name", "")))}</div>'
-        "</div></div>"
+        "</div></article>"
     )
 
 
@@ -185,7 +186,8 @@ def verdict_block(row: pd.Series) -> str:
             f'z-residual {num(row["residual_z"], 2)} &nbsp;·&nbsp; '
             f'grup {GROUP_LABEL[row["position_group"]]}')
     return (
-        f'<div class="fc-verdict fc-verdict--{key}"><span class="fc-verdict__dot"></span>'
+        f'<div class="fc-verdict fc-verdict--{key}"><span class="fc-verdict__dot" '
+        f'aria-hidden="true"></span>'
         f'<div><div class="fc-verdict__label">{escape(label)}</div>'
         f'<div class="fc-verdict__note">{escape(note)}</div>'
         f'<div class="fc-verdict__meta">{meta}</div></div></div>'
@@ -215,7 +217,8 @@ def percentile_bars(row: pd.Series, cols: list[str] | None = None) -> str:
         cls = "hot" if p >= 80 else ("cold" if p < 40 else "")
         rows.append(
             f'<div class="fc-bar"><span class="fc-bar__k">{CARD_STAT_LABEL.get(col, col)}</span>'
-            f'<span class="fc-bar__track"><span class="fc-bar__fill {cls}" '
+            f'<span class="fc-bar__track" role="img" aria-label="Persentil {p:.0f} dari 100">'
+            f'<span class="fc-bar__fill {cls}" '
             f'style="width:{p:.0f}%"></span></span>'
             f'<span class="fc-bar__v">{raw}<small> / {p:.0f}p</small></span></div>'
         )
@@ -248,7 +251,9 @@ def mini_card(row: pd.Series, note: str | None = None) -> str:
         gap = "+" + gap
     note_html = f'<div class="fc-mini__note">{escape(note)}</div>' if note else ""
     return (
-        f'<div class="fc-mini"><div class="fc-mini__ovr t-{row["tier"]}">{int(row["ovr"])}'
+        f'<article class="fc-mini" aria-label="{escape(str(row["short_name"]))}, '
+        f'OVR {int(row["ovr"])}, harga {escape(money(row["value_eur"]))}">'
+        f'<div class="fc-mini__ovr t-{row["tier"]}">{int(row["ovr"])}'
         f'<small>{escape(str(row["position_main"]))}</small></div>'
         f'<div class="fc-mini__main"><div class="fc-mini__name">{escape(str(row["short_name"]))}</div>'
         f'<div class="fc-mini__meta">{escape(str(row["club_name"]))} · {int(row["age"])} th · '
@@ -256,7 +261,7 @@ def mini_card(row: pd.Series, note: str | None = None) -> str:
         f'{_gap_bar(row["gap_pct"])}'
         f'<div class="fc-mini__val"><div class="now">{escape(money(row["value_eur"]))}</div>'
         f'<div class="gap {cls}">{escape(gap)}</div>'
-        f'<div class="gap {cls}">{escape(pct(row["gap_pct"], 0))}</div></div></div>'
+        f'<div class="gap {cls}">{escape(pct(row["gap_pct"], 0))}</div></div></article>'
     )
 
 

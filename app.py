@@ -51,6 +51,25 @@ LOW, HIGH = ratings.verdict_thresholds(DF["log_ratio"])
 LATEST = DF.loc[DF["is_latest"]]
 OPTIONS = fcv_data.player_options(DF)
 
+LEAGUE_CHOICES = sorted(LATEST["league_name"].unique())
+DEFAULT_LEAGUES = [
+    league for league in LEAGUE_CHOICES
+    if league in {"Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"}
+]
+DEFAULT_GROUPS = ["DEF", "MID", "ATT"]
+DEFAULT_AGE_RANGE = (DQ.age_min, DQ.age_max)
+DEFAULT_VALUE_RANGE = (0.0, 200.0)
+DEFAULT_MIN_OVR = 60
+
+
+def reset_market_filters() -> None:
+    """Kembalikan filter pasar tanpa mengubah pemain yang sedang dilihat."""
+    st.session_state.market_leagues = DEFAULT_LEAGUES
+    st.session_state.market_groups = DEFAULT_GROUPS
+    st.session_state.market_age = DEFAULT_AGE_RANGE
+    st.session_state.market_value = DEFAULT_VALUE_RANGE
+    st.session_state.market_ovr = DEFAULT_MIN_OVR
+
 ui.inject_css()
 model_note = (f"±{METRICS['holdout_fresh_model']['median_ape_pct']:.0f}%"
               if METRICS else "RF 100 pohon")
@@ -79,20 +98,34 @@ with st.sidebar:
                 '<span class="fc-sec__title">Filter Pasar</span></div>',
                 unsafe_allow_html=True)
 
-    league_choices = sorted(LATEST["league_name"].unique())
-    default_leagues = [lg for lg in league_choices if lg in
-                       {"Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"}]
-    sel_leagues = st.multiselect("Liga", league_choices, default=default_leagues)
-    sel_groups = st.multiselect("Lini", ["DEF", "MID", "ATT"], default=["DEF", "MID", "ATT"],
-                                format_func=lambda g: GROUP_LABEL[g])
+    sel_leagues = st.multiselect("Liga", LEAGUE_CHOICES, default=DEFAULT_LEAGUES,
+                                 key="market_leagues")
+    sel_groups = st.multiselect("Lini", DEFAULT_GROUPS, default=DEFAULT_GROUPS,
+                                format_func=lambda g: GROUP_LABEL[g], key="market_groups")
     age_lo, age_hi = st.slider("Rentang umur", DQ.age_min, DQ.age_max,
-                               (DQ.age_min, DQ.age_max))
+                               DEFAULT_AGE_RANGE, key="market_age")
     val_lo, val_hi = st.slider("Harga pasar (juta €)", 0.0,
-                               float(LATEST["value_m"].max().round()), (0.0, 200.0), step=0.5)
-    min_ovr = st.slider("OVR minimum", 40, 99, 60)
+                               float(LATEST["value_m"].max().round()), DEFAULT_VALUE_RANGE,
+                               step=0.5, key="market_value")
+    min_ovr = st.slider("OVR minimum", 40, 99, DEFAULT_MIN_OVR, key="market_ovr")
 
-    st.caption(f"Filter aktif menyaring {len(sel_leagues)} liga · "
-               f"{ui.count(DQ.players)} pemain di database.")
+    market_mask = (
+        LATEST["league_name"].isin(sel_leagues)
+        & LATEST["position_group"].isin(sel_groups)
+        & LATEST["age"].between(age_lo, age_hi)
+        & LATEST["value_m"].between(val_lo, val_hi)
+        & (LATEST["ovr"] >= min_ovr)
+    )
+    filtered_players = int(market_mask.sum())
+    result_class = "is-empty" if filtered_players == 0 else ""
+    st.markdown(
+        f'<div class="fc-filter-result {result_class}"><span>Hasil filter</span>'
+        f'<b>{ui.count(filtered_players)} pemain</b>'
+        f'<small>dari {ui.count(len(LATEST))} snapshot terbaru</small></div>',
+        unsafe_allow_html=True,
+    )
+    st.button("Reset filter pasar", on_click=reset_market_filters,
+              use_container_width=True, type="tertiary")
 
 selected = player_rows.loc[player_rows["age"] == snapshot_age].iloc[0]
 group_peers = LATEST.loc[LATEST["position_group"] == selected["position_group"]]
@@ -250,6 +283,10 @@ def render_compare() -> None:
 
     row_a = DF.loc[DF["player_key"] == OPTIONS[label_a]].sort_values("age").iloc[-1]
     row_b = DF.loc[DF["player_key"] == OPTIONS[label_b]].sort_values("age").iloc[-1]
+
+    if label_a == label_b:
+        st.warning("Pilih dua pemain berbeda agar perbandingan atribut dan valuasi bermakna.")
+        return
 
     card_a, mid, card_b = st.columns([1, 1.25, 1], gap="large")
     with card_a:

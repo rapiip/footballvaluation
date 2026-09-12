@@ -82,6 +82,11 @@ h1, h2, h3, h4 { font-family: var(--fc-display); letter-spacing: var(--ls-tight)
 p, li, span, div { font-family: var(--fc-body); }
 a { color: var(--fc-cyan); text-decoration: none; }
 a:hover { text-decoration: underline; }
+button:focus-visible, [role="tab"]:focus-visible, [role="slider"]:focus-visible,
+[data-baseweb="select"]:focus-within, summary:focus-visible {
+  outline: 2px solid var(--fc-lime) !important;
+  outline-offset: 3px;
+}
 
 /* angka selalu tabular supaya kolom harga & stat sejajar */
 .fc-tile__v, .fc-bar__v, .fc-mini__val, .fc-card__ovr, .fc-card__stats,
@@ -384,6 +389,28 @@ a:hover { text-decoration: underline; }
   color: var(--fc-dim) !important;
 }
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { font-size: 11px !important; line-height: 1.5; }
+.fc-filter-result {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 12px;
+  margin-top: 7px; padding: 11px 12px; border: 1px solid rgba(0, 245, 160, .28);
+  background: rgba(0, 245, 160, .065); border-radius: 3px;
+}
+.fc-filter-result span {
+  color: var(--fc-dim); font-size: 10px; font-weight: 600; letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+.fc-filter-result b {
+  color: var(--fc-green); font-family: var(--fc-display); font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.fc-filter-result small { grid-column: 1 / -1; color: var(--fc-dim-2); font-size: 10.5px; }
+.fc-filter-result.is-empty { border-color: rgba(255, 176, 32, .38); background: rgba(255, 176, 32, .07); }
+.fc-filter-result.is-empty b { color: var(--fc-amber); }
+[data-testid="stSidebar"] .stButton button[kind="tertiary"] {
+  min-height: 40px; border: 1px solid var(--fc-line); color: var(--fc-dim);
+}
+[data-testid="stSidebar"] .stButton button[kind="tertiary"]:hover {
+  border-color: rgba(25, 211, 250, .42); color: var(--fc-ink);
+}
 
 /* label widget di area utama disamakan dengan label sidebar */
 [data-testid="stMainBlockContainer"] label p {
@@ -459,4 +486,40 @@ hr { border-color: var(--fc-line); }
   font-family: var(--fc-body); font-size: 10.5px; font-weight: 600; letter-spacing: .6px;
   border: 1px solid var(--fc-line); padding: 2px 7px; border-radius: 2px;
   color: var(--fc-ink); background: rgba(255, 255, 255, .05); white-space: nowrap;
+}
+
+/* ---------- responsive & motion ---------- */
+@media (max-width: 900px) {
+  [data-testid="stMainBlockContainer"] { padding: 1.25rem 1rem 2rem; }
+  .fc-top { align-items: flex-start; gap: 12px; padding: 14px 16px; flex-wrap: wrap; }
+  .fc-top__mark { font-size: 24px; padding: 9px 12px 8px; }
+  .fc-top__title { font-size: 23px; }
+  .fc-top__sub { margin-top: 4px; letter-spacing: .9px; }
+  .fc-top__spacer { display: none; }
+  .fc-top__pill { flex: 1 1 calc(50% - 6px); text-align: center; }
+  .stTabs [data-baseweb="tab-list"] { overflow-x: auto; scrollbar-width: thin; }
+  .stTabs [data-baseweb="tab"] { flex: 0 0 auto; padding: 10px 15px; font-size: 14px; }
+  .fc-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 640px) {
+  :root { --fs-xl: 24px; --fs-lg: 22px; --fs-hero: 44px; }
+  .fc-top > div:nth-child(2) { flex: 1; min-width: 190px; }
+  .fc-top__pill { font-size: 9.5px; padding: 7px 8px; }
+  .fc-top__pill b { font-size: 14px; }
+  .fc-intro { margin-bottom: 14px; }
+  .fc-card { max-width: 300px; }
+  .fc-mini { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; padding: 10px 11px; }
+  .fc-mini__bar { display: none; }
+  .fc-mini__ovr { font-size: 21px; }
+  .fc-mini__val .now { font-size: 15px; }
+  .fc-bar { grid-template-columns: 62px 1fr 58px; gap: 8px; }
+  .fc-bar--compact { grid-template-columns: 92px 1fr 28px; }
+  .fc-verdict { align-items: flex-start; padding: 14px 15px; }
+  .fc-verdict__label { font-size: 19px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  .fc-mini:hover { transform: none; }
 }
